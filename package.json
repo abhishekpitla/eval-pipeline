@@ -1,0 +1,21 @@
+{
+  "name": "eval-pipeline",
+  "version": "1.0.0",
+  "description": "AI Agent Evaluation Pipeline",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "worker": "node src/worker.js",
+    "db:init": "node sql/init.js",
+    "db:seed": "node seed/generate.js",
+    "test": "node tests/phase1.test.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mysql2": "^3.10.1",
+    "openai": "^6.33.0",
+    "uuid": "^10.0.0"
+  }
+}
