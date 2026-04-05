@@ -52,8 +52,10 @@ module.exports.evaluateConversation = async (conversation) => {
         score = Math.max(0, Math.min(1, score * correctionFactor));
     }
 
-    // ── Step 5: Hard caps (business rules, not AI judgment) ───────────────────
-    if (facts.total_latency_ms > 3000) score = Math.min(score, 0.70);
+    // ── Step 5: Latency penalty (proportional, not a hard cap) ────────────────
+    // A hard cap at 0.70 was inflating scores of bad conversations with high latency.
+    // Instead apply a proportional 15% penalty so bad conversations still score low.
+    if (facts.total_latency_ms > 3000) score = score * 0.85;
 
     // ── Step 6: Collect all issues ────────────────────────────────────────────
     const allIssues = [

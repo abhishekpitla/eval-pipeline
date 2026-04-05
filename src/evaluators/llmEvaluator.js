@@ -40,7 +40,7 @@ OBJECTIVE FACTS EXTRACTED FROM CONVERSATION:
 - Total latency: ${facts.total_latency_ms}ms
 - Turn count: ${facts.turn_count} (structure valid: ${facts.turn_structure_valid})
 - Empty assistant responses: ${facts.empty_response_turns.length > 0 ? facts.empty_response_turns.join(', ') : 'none'}
-- Mission completed flag: ${facts.mission_completed}
+- Mission completed: ${facts.mission_completed} ← IMPORTANT: if false, task_completion MUST be scored ≤ 0.3
 - User-stated constraints: ${facts.user_constraints.length > 0 ? facts.user_constraints.map(c => `"${c}"`).join(', ') : 'none'}
 
 TOOL CALLS MADE:
@@ -99,9 +99,9 @@ Evaluate the conversation across FOUR dimensions and return a single JSON object
 PART 1 — RESPONSE QUALITY (LLM JUDGE):
 Rate 0.0–1.0:
 - helpfulness: Is the assistant genuinely useful for what the user needed?
-- factuality: Are statements accurate and grounded?
+- factuality: Are statements accurate and grounded? Hallucinating results or booking refs that don't exist = 0.0.
 - tone: Is the tone appropriate and professional?
-- task_completion: Did the assistant fully accomplish what the user asked?
+- task_completion: Did the assistant fully accomplish what the user asked? RULE: if mission_completed=false (see facts above), this MUST be ≤ 0.3. If the agent hallucinated a result or gave up, score 0.0–0.2.
 
 Return: "llm_judge": {"helpfulness": <0-1>, "factuality": <0-1>, "tone": <0-1>, "task_completion": <0-1>, "reasoning": "<concise>"}
 
@@ -115,7 +115,7 @@ PART 3 — HEURISTIC QUALITY:
 Using the objective facts provided, evaluate:
 1. latency_acceptability (0-1): Is the response latency acceptable? (>3000ms = very low, >1000ms = moderate penalty, <500ms = full marks)
 2. structural_integrity (0-1): Is the turn structure valid? Are there empty responses?
-3. response_completeness (0-1): Do assistant responses fully address each user message?
+3. response_completeness (0-1): Do assistant responses fully address each user message? RULE: if mission_completed=false, this must be ≤ 0.4 unless the failure was outside the agent's control.
 4. response_appropriateness (0-1): Is the length and format of each response appropriate for the question?
 
 Return: "heuristic": {"latency_acceptability": <0-1>, "structural_integrity": <0-1>, "response_completeness": <0-1>, "response_appropriateness": <0-1>, "reasoning": "<brief>"}
@@ -261,13 +261,13 @@ REQUIRED OUTPUT — single JSON object, no extra keys:
             ) / 5;
 
             // Surface tool issues from AI judgment
-            if ((tc.semantic_selection ?? 1) < 0.5) {
+            if ((tc.semantic_selection ?? 1) < 0.7) {
                 result.toolCall.issues.push({ type: 'wrong_tool', severity: 'error', message: `AI rated semantic tool selection at ${tc.semantic_selection}` });
             }
             if ((tc.hallucination_assessment ?? 1) < 0.7) {
                 result.toolCall.issues.push({ type: 'hallucinated_parameter', severity: 'warning', message: `AI detected ungrounded parameters (score: ${tc.hallucination_assessment})` });
             }
-            if ((tc.execution_quality ?? 1) < 0.5) {
+            if ((tc.execution_quality ?? 1) < 0.6) {
                 result.toolCall.issues.push({ type: 'execution_failure', severity: 'error', message: `Tool execution quality rated ${tc.execution_quality}` });
             }
 
