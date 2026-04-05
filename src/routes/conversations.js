@@ -81,8 +81,12 @@ router.post('/', async (req, res) => {
                     for (const ann of annotations) {
                         if (!ann.annotator_id || !ann.type || !ann.label) continue;
                         await db.execute(
-                            `INSERT IGNORE INTO annotations (conversation_id, annotator_id, annotation_type, label, confidence, notes)
-                             VALUES (?, ?, ?, ?, ?, ?)`,
+                            `INSERT INTO annotations (conversation_id, annotator_id, annotation_type, label, confidence, notes)
+                             VALUES (?, ?, ?, ?, ?, ?)
+                             ON DUPLICATE KEY UPDATE
+                             label = VALUES(label),
+                             confidence = VALUES(confidence),
+                             notes = VALUES(notes)`,
                             [id, ann.annotator_id, ann.type, ann.label, ann.confidence ?? null, ann.notes ?? null]
                         );
                     }

@@ -20,9 +20,7 @@ async function runPipeline(conversation) {
     if (hasToolCall)  { overall += toolCall.score  * 0.30; totalWeight += 0.30; }
     if (totalWeight < 1.0) overall = overall / totalWeight;
 
-    const hasUnknownTool = (toolCall.issues || []).some(i => i.type === 'unknown_tool');
-    if (hasUnknownTool) overall = Math.min(overall, 0.65);
-    if ((facts.total_latency_ms || 0) > 3000) overall = Math.min(overall, 0.70);
+    if ((facts.total_latency_ms || 0) > 3000) overall = overall * 0.85;
 
     return {
         scores: {

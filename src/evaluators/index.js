@@ -2,7 +2,7 @@ const { v4: uuidv4 } = require('uuid');
 const db           = require('../db');
 const factExtractor = require('./factExtractor');
 const llmEvaluator  = require('./llmEvaluator');
-const calibration   = require('../meta/calibration');
+
 
 async function fetchMatchingSuggestions(issues) {
     if (!issues.length) return [];
@@ -42,22 +42,12 @@ module.exports.evaluateConversation = async (conversation) => {
     // Normalise if some dimensions were N/A
     if (totalWeight < 1.0) score = score / totalWeight;
 
-    // ── Step 4: Apply drift correction from meta-evaluation ────────────────
-    let correctionFactor = 1.0;
-    try {
-        correctionFactor = await calibration.getLatestCorrection('v4');
-    } catch (_) { /* no corrections yet */ }
-
-    if (correctionFactor !== 1.0) {
-        score = Math.max(0, Math.min(1, score * correctionFactor));
-    }
-
-    // ── Step 5: Latency penalty (proportional, not a hard cap) ────────────────
+    // ── Step 4: Latency penalty (proportional, not a hard cap) ────────────────
     // A hard cap at 0.70 was inflating scores of bad conversations with high latency.
     // Instead apply a proportional 15% penalty so bad conversations still score low.
     if (facts.total_latency_ms > 3000) score = score * 0.85;
 
-    // ── Step 6: Collect all issues ────────────────────────────────────────────
+    // ── Step 5: Collect all issues ────────────────────────────────────────────
     const allIssues = [
         ...(heuristic.issues || []),
         ...(toolCall.issues  || []),
@@ -65,7 +55,7 @@ module.exports.evaluateConversation = async (conversation) => {
         ...(coherence.issues || [])
     ];
 
-    // ── Step 7: Confidence-based routing ──────────────────────────────────────
+    // ── Step 6: Confidence-based routing ──────────────────────────────────────
     const review_routing = { needs_human_review: false, reasons: [] };
 
     // Rule 1: Overall score in ambiguous zone (0.4–0.6)
@@ -90,7 +80,7 @@ module.exports.evaluateConversation = async (conversation) => {
         review_routing.reasons.push('critical_issue_detected');
     }
 
-    // ── Step 8: Build scores object ───────────────────────────────────────────
+    // ── Step 7: Build scores object ───────────────────────────────────────────
     const scores = {
         overall:      +score.toFixed(4),
         llmJudge:     +llmJudge.score.toFixed(4),
@@ -108,10 +98,10 @@ module.exports.evaluateConversation = async (conversation) => {
         ai: hasToolCall ? toolCall.details : null
     };
 
-    // ── Step 9: Fetch matching suggestions ────────────────────────────────────
+    // ── Step 8: Fetch matching suggestions ────────────────────────────────────
     const improvement_suggestions = await fetchMatchingSuggestions(allIssues);
 
-    // ── Step 10: Persist ──────────────────────────────────────────────────────
+    // ── Step 9: Persist ──────────────────────────────────────────────────────
     const id = uuidv4();
     await db.execute(
         `INSERT INTO evaluations (id, conversation_id, scores, tool_evaluation, issues_detected, improvement_suggestions, evaluator_version)

@@ -186,12 +186,12 @@ async function testEvaluationsRealtime() {
     assert('Has issues_detected',    Array.isArray(r.body.issues_detected));
     assert('Has tool_evaluation',    r.body.tool_evaluation !== undefined);
     assert('overall is 0-1',         r.body.scores.overall >= 0 && r.body.scores.overall <= 1);
-    assert('evaluator_version is v2',r.body.evaluator_version === 'v2');
+    assert('evaluator_version is v4',r.body.evaluator_version === 'v4');
 
     // High latency conversation should be capped at 0.70
     const highLatency = await req('POST', `${BASE}/api/evaluations/test_conv_003?realtime=true`);
     assert('High latency conv evaluated',  highLatency.status === 200);
-    assert('High latency capped at 0.70', highLatency.body.scores?.overall <= 0.70,
+    assert('High latency penalized (score * 0.85)', highLatency.body.scores?.overall <= 0.85,
         `got ${highLatency.body.scores?.overall}`);
 
     // Batch realtime

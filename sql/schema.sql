@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS annotations (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
   INDEX idx_anno_conv_id (conversation_id),
-  INDEX idx_anno_annotator_type (annotator_id, annotation_type)
+  UNIQUE INDEX idx_anno_annotator_type (conversation_id, annotator_id, annotation_type)
 );
 
 CREATE TABLE IF NOT EXISTS meta_evaluations (

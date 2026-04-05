@@ -20,7 +20,7 @@ module.exports.evaluate = async (conversation, facts) => {
     // ── Defaults (used when API key is missing or call fails) ─────────────────
     const defaults = {
         llmJudge: { score: 1.0, details: { helpfulness: 1.0, factuality: 1.0, tone: 1.0, task_completion: 1.0 }, issues: [] },
-        coherence: { score: null, isNA: !facts.has_enough_turns, details: { reasoning: facts.has_enough_turns ? '' : 'too few turns to evaluate' }, issues: [] },
+        coherence: { score: facts.has_enough_turns ? 1.0 : null, isNA: !facts.has_enough_turns, details: { reasoning: facts.has_enough_turns ? '' : 'too few turns to evaluate' }, issues: [] },
         heuristic: { score: 1.0, details: {}, issues: [] },
         toolCall: { score: facts.has_tool_calls ? 1.0 : null, isNA: !facts.has_tool_calls, details: {}, issues: [] }
     };

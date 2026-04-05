@@ -99,69 +99,65 @@ const adaptedConversation = {
     metadata: conversation.metadata
 };
 
-// ─── Step 5: Run through each evaluator directly ───
+// ─── Step 5: Run through the current pipeline (factExtractor + llmEvaluator) ───
 
-const heuristic = require('./src/evaluators/heuristic');
-const toolCall = require('./src/evaluators/toolCall');
-const llmJudge = require('./src/evaluators/llmJudge');
-const coherence = require('./src/evaluators/coherence');
+const factExtractor = require('./src/evaluators/factExtractor');
+const llmEvaluator  = require('./src/evaluators/llmEvaluator');
 
 async function run() {
     console.log('\n' + '='.repeat(60));
     console.log('STEP 2: RUNNING THROUGH PIPELINE');
     console.log('='.repeat(60));
 
-    console.log('\n[1/4] Running Heuristic Evaluator...');
-    const resHeuristic = await heuristic.evaluate(adaptedConversation);
-    console.log('  Score:', resHeuristic.score.toFixed(3));
-    console.log('  Issues:', resHeuristic.issues?.length ? resHeuristic.issues : 'none');
+    console.log('\n[1/2] Extracting facts...');
+    const facts = factExtractor.extract(adaptedConversation);
+    console.log('  Facts:', JSON.stringify(facts, null, 4));
 
-    console.log('\n[2/4] Running Tool Call Evaluator...');
-    const resTool = await toolCall.evaluate(adaptedConversation);
-    console.log('  Score:', resTool.score.toFixed(3));
-    console.log('  Details:', JSON.stringify(resTool.details, null, 4));
-    console.log('  Issues:', resTool.issues?.length ? resTool.issues : 'none');
+    console.log('\n[2/2] Running LLM evaluator (all 4 dimensions)...');
+    const { llmJudge, coherence: resCoherence, heuristic: resHeuristic, toolCall: resTool } =
+        await llmEvaluator.evaluate(adaptedConversation, facts);
 
-    console.log('\n[3/4] Running LLM Judge (Claude)...');
-    const resLlm = await llmJudge.evaluate(adaptedConversation);
-    console.log('  Score:', resLlm.score.toFixed(3));
-    console.log('  Details:', JSON.stringify(resLlm.details, null, 4));
-    console.log('  Issues:', resLlm.issues?.length ? JSON.stringify(resLlm.issues, null, 4) : 'none');
-
-    console.log('\n[4/4] Running Coherence Evaluator (Claude)...');
-    const resCoherence = await coherence.evaluate(adaptedConversation);
-    console.log('  Score:', resCoherence.score.toFixed(3));
-    console.log('  Details:', JSON.stringify(resCoherence.details, null, 4));
-    console.log('  Issues:', resCoherence.issues?.length ? resCoherence.issues : 'none');
+    console.log('  LLM Judge Score:', llmJudge.score.toFixed(3));
+    console.log('  LLM Judge Details:', JSON.stringify(llmJudge.details, null, 4));
+    console.log('  Heuristic Score:', resHeuristic.score.toFixed(3));
+    console.log('  Tool Call Score:', resTool.isNA ? 'N/A' : resTool.score.toFixed(3));
+    console.log('  Coherence Score:', resCoherence.isNA ? 'N/A' : resCoherence.score.toFixed(3));
 
     // ─── Step 6: Aggregate (same logic as evaluators/index.js) ───
 
-    const overallScore =
-        (resLlm.score * 0.3) +
-        (resTool.score * 0.3) +
-        (resCoherence.score * 0.2) +
-        (resHeuristic.score * 0.2);
+    const hasCoherence = !resCoherence.isNA;
+    const hasToolCall  = !resTool.isNA;
+
+    let totalWeight = 0;
+    let overallScore = 0;
+    overallScore += llmJudge.score      * 0.30; totalWeight += 0.30;
+    overallScore += resHeuristic.score  * 0.20; totalWeight += 0.20;
+    if (hasCoherence) { overallScore += resCoherence.score * 0.20; totalWeight += 0.20; }
+    if (hasToolCall)  { overallScore += resTool.score      * 0.30; totalWeight += 0.30; }
+    if (totalWeight < 1.0) overallScore = overallScore / totalWeight;
+
+    if (facts.total_latency_ms > 3000) overallScore = overallScore * 0.85;
 
     const allIssues = [
         ...(resHeuristic.issues || []),
         ...(resTool.issues || []),
-        ...(resLlm.issues || []),
+        ...(llmJudge.issues || []),
         ...(resCoherence.issues || [])
     ];
 
-    // ─── Step 7: Final evaluation output (matches spec schema) ───
+    // ─── Step 7: Final evaluation output ───
 
     const evaluationOutput = {
         evaluation_id: 'eval_sample_test',
         conversation_id: conversation.conversation_id,
         scores: {
             overall: parseFloat(overallScore.toFixed(3)),
-            response_quality: parseFloat(resLlm.score.toFixed(3)),
-            tool_accuracy: parseFloat(resTool.score.toFixed(3)),
-            coherence: parseFloat(resCoherence.score.toFixed(3)),
+            response_quality: parseFloat(llmJudge.score.toFixed(3)),
+            tool_accuracy: hasToolCall ? parseFloat(resTool.score.toFixed(3)) : 'N/A',
+            coherence: hasCoherence ? parseFloat(resCoherence.score.toFixed(3)) : 'N/A',
             heuristic: parseFloat(resHeuristic.score.toFixed(3))
         },
-        tool_evaluation: resTool.details,
+        tool_evaluation: hasToolCall ? resTool.details : null,
         issues_detected: allIssues,
         improvement_suggestions: []
     };

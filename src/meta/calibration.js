@@ -18,9 +18,10 @@ function mapLabelToNumeric(label) {
 
 // ─── Map annotation types to evaluator score keys ────────────────────────────
 const ANNOTATION_TO_EVAL_KEY = {
-    tool_accuracy: 'toolCall',
-    helpfulness:   'llmJudge',
-    coherence:     'coherence'
+    tool_accuracy:   'toolCall',
+    helpfulness:     'llmJudge',
+    coherence:       'coherence',
+    overall_quality: 'overall'
 };
 
 // ─── Fix 1: Confidence-weighted human score comparison ───────────────────────
