@@ -74,7 +74,7 @@ Return: "coherence": {"skip": false, "context_retention": <0-1>, "consistency": 
         ? `PART 4 — TOOL CALL: No tool calls were made. Return "tool_call": {"skip": true, "semantic_selection": null, "parameter_accuracy": null, "hallucination_assessment": null, "execution_quality": null, "result_utilization": null}`
         : `PART 4 — TOOL CALL:
 Using the tool call facts above, evaluate:
-1. semantic_selection (0-1): Was each tool semantically the right choice for the user's intent? Judge this ONLY by whether the tool name and purpose match what the user asked for. For example: user says "book a flight" and agent calls "cancel_booking" = wrong tool (score 0). User says "check weather" and agent calls "get_weather" = correct tool (score 1). Do NOT penalize simply because you don't recognize the tool name — any tool name is valid as long as it semantically matches the user's request.
+1. semantic_selection (0-1): Was each tool semantically the right choice for the user's intent? CRITICAL RULE: if ANY tool call used the wrong tool for what the user asked, this score MUST be ≤ 0.3 — one correct call later does NOT redeem an earlier wrong call. Judge by whether the tool name and purpose match the user's request. Example: user says "check my flight status" but agent calls "get_weather" = wrong tool, score ≤ 0.2 even if the agent later called the right tool. Do NOT penalize simply because you don't recognize the tool name — any tool name is valid as long as it semantically matches the user's request.
 2. parameter_accuracy (0-1): Were the parameters contextually correct and complete for the task?
 3. hallucination_assessment (0-1): Are the parameter values grounded in what the user actually said? (1.0 = fully grounded, lower if values were invented)
 4. execution_quality (0-1): Did the tools execute successfully? Did failures affect the conversation?
@@ -252,13 +252,20 @@ REQUIRED OUTPUT — single JSON object, no extra keys:
                 result_utilization: tc.result_utilization ?? 1.0,
                 reasoning: tc.reasoning || ''
             };
-            result.toolCall.score = (
-                result.toolCall.details.semantic_selection +
-                result.toolCall.details.parameter_accuracy +
-                result.toolCall.details.hallucination_assessment +
-                result.toolCall.details.execution_quality +
-                result.toolCall.details.result_utilization
-            ) / 5;
+            // Weighted scoring: semantic_selection is 40% because calling the
+            // wrong tool is a fundamental failure that must dominate the score.
+            result.toolCall.score =
+                (result.toolCall.details.semantic_selection     * 0.40) +
+                (result.toolCall.details.parameter_accuracy     * 0.20) +
+                (result.toolCall.details.hallucination_assessment * 0.10) +
+                (result.toolCall.details.execution_quality      * 0.15) +
+                (result.toolCall.details.result_utilization     * 0.15);
+
+            // Hard cap: if the wrong tool was called, the score cannot exceed 0.4
+            // regardless of how well other dimensions performed.
+            if (result.toolCall.details.semantic_selection < 0.7) {
+                result.toolCall.score = Math.min(result.toolCall.score, 0.4);
+            }
 
             // Surface tool issues from AI judgment
             if ((tc.semantic_selection ?? 1) < 0.7) {
